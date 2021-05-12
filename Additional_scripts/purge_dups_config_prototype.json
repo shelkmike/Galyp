@@ -1,0 +1,45 @@
+{
+  "cc": {
+    "fofn": "./pb.fofn",
+    "isdip": 1,
+    "core": HERE_INSERT_THE_NUMBER_OF_CPU_THREADS,
+    "mem": 40000,
+    "queue": "normal",
+    "mnmp_opt": "-x map-ont",
+    "bwa_opt": "",
+    "ispb": 1,
+    "skip": 0
+  },
+  "sa": {
+    "core": HERE_INSERT_THE_NUMBER_OF_CPU_THREADS,
+    "mem": 40000,
+    "queue": "normal"
+  },
+  "busco": {
+    "core": HERE_INSERT_THE_NUMBER_OF_CPU_THREADS,
+    "mem": 40000,
+    "queue": "long",
+    "skip": 1,
+    "lineage": "",
+    "prefix": "some_prefix",
+    "tmpdir": "busco_tmp"
+  },
+  "pd": {
+    "mem": 40000,
+    "queue": "normal"
+  },
+  "gs": {
+    "mem": 40000,
+    "oe": 1
+  },
+  "kcp": {
+    "core": HERE_INSERT_THE_NUMBER_OF_CPU_THREADS,
+    "mem": 40000,
+    "fofn": "",
+    "prefix": "some_prefix",
+    "tmpdir": "kcp_tmp",
+    "skip": 1
+  },
+  "ref": "./polished_contigs__step_5.fasta",
+  "out_dir": "./Purge_dups__output_folder"
+}
