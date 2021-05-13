@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #Galyp, a pipeline for genome assembly and post-assembly processing. For more details, see https://github.com/shelkmike/Galyp .
-galyp_version="1.10"
+galyp_version="1.12"
 
 #######################################
 #Step 0. Getting command line arguments and checking whether all required programs are in $PATH.
@@ -318,9 +318,9 @@ fi
 if [[ $path_to_short_reads_R1 =~ ".fastq.gz"$ ]] || [[ $path_to_short_reads_R1 =~ ".fq.gz"$ ]] || [[ $path_to_short_reads_R1 =~ ".FASTQ.gz"$ ]] || [[ $path_to_short_reads_R1 =~ ".FQ.gz"$ ]]; then
 	if (( $(echo "$number_of_the_first_step_in_the_pipeline_to_execute == 1" | bc -l) )) #if the user didn't indicate that this step should be skipped
 	then
-		gzip --decompress --stdout $path_to_short_reads_R1 >$path_to_the_output_folder/short_reads_R1.fasta
+		gzip --decompress --stdout $path_to_short_reads_R1 >$path_to_the_output_folder/short_reads_R1.fastq
 	fi	
-	path_to_short_reads_R1=$path_to_the_output_folder/short_reads_R1.fasta
+	path_to_short_reads_R1=$path_to_the_output_folder/short_reads_R1.fastq
 fi
 
 #If short reads of the second end are in fasta.gz
@@ -336,9 +336,9 @@ fi
 if [[ $path_to_short_reads_R2 =~ ".fastq.gz"$ ]] || [[ $path_to_short_reads_R2 =~ ".fq.gz"$ ]] || [[ $path_to_short_reads_R2 =~ ".FASTQ.gz"$ ]] || [[ $path_to_short_reads_R2 =~ ".FQ.gz"$ ]]; then
 	if (( $(echo "$number_of_the_first_step_in_the_pipeline_to_execute == 1" | bc -l) )) #if the user didn't indicate that this step should be skipped
 	then
-		gzip --decompress --stdout $path_to_short_reads_R2 >$path_to_the_output_folder/short_reads_R2.fasta
+		gzip --decompress --stdout $path_to_short_reads_R2 >$path_to_the_output_folder/short_reads_R2.fastq
 	fi	
-	path_to_short_reads_R2=$path_to_the_output_folder/short_reads_R2.fasta
+	path_to_short_reads_R2=$path_to_the_output_folder/short_reads_R2.fastq
 fi
 
 #If long reads are in fasta.gz
