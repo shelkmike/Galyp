@@ -1,7 +1,7 @@
 ![Logo of Galyp](https://gcf.fbb.msu.ru/shelkmike/Galyp_logo/galyp_logo.jpeg)
 
 Galyp is a pipeline for *hybrid genome assembly*, which means an assembly that uses both short (Illumina) and long (Nanopore or PacBio) reads. Galyp was designed specifically to create relatively good assemblies when the *coverage by long reads is low*, like 10x-30x. Here are some assemblies made by Galyp:
-<p align="center"><img src="https://gcf.fbb.msu.ru/shelkmike/Galyp_logo/table.png"></p>
+<p align="center"><img src="https://gcf.fbb.msu.ru/shelkmike/Galyp_logo/table.png?"></p>
 </TABLE>
 
 ### The pipeline
