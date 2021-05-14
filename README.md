@@ -49,4 +49,6 @@ You can try it, but the assembly quality probably won't be awesome. However, it 
 4\) Galyp was designed to make relatively good assemblies when the coverage by long reads is low. But can it be used when the coverage is *high*?<br />
 Yes. However, if the coverage by long reads is >30, I recommend to try also some long-read assemblers like [Flye](https://github.com/fenderglass/Flye).<br />
 5\) How to *cite* Galyp?<br />
-The paper about the nuclear genome of Fagopyrum esculentum subsp. ancestrale, for which Galyp was developed, is to be published soon.
+The paper about the nuclear genome of Fagopyrum esculentum subsp. ancestrale, for which Galyp was developed, is to be published soon.<br />
+6\) Where to ask *questions* about Galyp?<br />
+Ask them in the [Issues](https://github.com/shelkmike/Galyp/issues) section on GitHub.
