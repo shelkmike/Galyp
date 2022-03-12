@@ -39,7 +39,7 @@ To see the complete list of parameters, run<br />
 `bash galyp.sh --help`<br />
 Other parameters include, for example, --threads (how many CPU threads to use) and --strictness (increase it if you want your assembly to be more fragmented but have less misassemblies).<br /><br />
 
-### Frequently asked questions:
+### Questions and answers:
 1\) How to *install* Galyp?<br />
 Galyp does not require any installation. Just download the latest release from the [Releases](https://github.com/shelkmike/Galyp/releases) page on GitHub.<br />
 2\) How much *RAM* does Galyp need?<br />
