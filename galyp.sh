@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #Galyp, a pipeline for genome assembly and post-assembly processing. For more details, see https://github.com/shelkmike/Galyp .
-galyp_version="1.12"
+galyp_version="1.13"
 
 #######################################
 #Step 0. Getting command line arguments and checking whether all required programs are in $PATH.
@@ -114,7 +114,7 @@ Descriptive options:
 ###########################################
 Steps of the pipeline:
 1) Preprocessing of reads, estimation of genome size, and some other initial operations.
-2) Assembly by ABySS.
+2) Assembly by Minia.
 3) Assembly by DBG2OLC.
 4) Polishing by Sparc.
 5) Polishing by HyPo.
@@ -202,18 +202,6 @@ if ! [ $(type -P perl 2>/dev/null) ]
 then
 	number_of_the_current_problem_with_unavailability=$(expr $number_of_the_current_problem_with_unavailability + 1)
 	list_of_warnings_about_unavailability_of_dependencies=$list_of_warnings_about_unavailability_of_dependencies"\n\n"$number_of_the_current_problem_with_unavailability") Cannot find 'perl' in \$PATH."
-fi
-
-if ! [ $(type -P mpirun 2>/dev/null) ] 
-then
-	number_of_the_current_problem_with_unavailability=$(expr $number_of_the_current_problem_with_unavailability + 1)
-	list_of_warnings_about_unavailability_of_dependencies=$list_of_warnings_about_unavailability_of_dependencies"\n\n"$number_of_the_current_problem_with_unavailability") Cannot find 'mpirun' in \$PATH. OpenMPI is required by ABySS."
-fi
-
-if ! [ $(type -P abyss-pe 2>/dev/null) ] 
-then
-	number_of_the_current_problem_with_unavailability=$(expr $number_of_the_current_problem_with_unavailability + 1)
-	list_of_warnings_about_unavailability_of_dependencies=$list_of_warnings_about_unavailability_of_dependencies"\n\n"$number_of_the_current_problem_with_unavailability") Cannot find 'abyss-pe' in \$PATH. Please, add the folder with ABySS binaries to \$PATH."
 fi
 
 if ! [ $(type -P blasr 2>/dev/null) ] 
@@ -379,7 +367,7 @@ echo $path_to_short_reads_R1 >$path_to_the_output_folder/list_of_paths_to_files_
 echo $path_to_short_reads_R2 >>$path_to_the_output_folder/list_of_paths_to_files_with_short_reads.txt
 if (( $(echo "$number_of_the_first_step_in_the_pipeline_to_execute == 1" | bc -l) )) #if the user didn't indicate that this step should be skipped
 then
-	kmergenie $path_to_the_output_folder/list_of_paths_to_files_with_short_reads.txt -t $number_of_cpu_threads_to_use -o $path_to_the_output_folder/kmergenie_results --diploid -l 21 -k 71 >$path_to_the_output_folder/kmergenie_logs.txt #I restrict the largest k-mer size by 71, because abyss-pe sometimes crashes on large k-mers.
+	kmergenie $path_to_the_output_folder/list_of_paths_to_files_with_short_reads.txt -t $number_of_cpu_threads_to_use -o $path_to_the_output_folder/kmergenie_results --diploid -l 21 -k 121 >$path_to_the_output_folder/kmergenie_logs.txt #I restrict the largest k-mer size by 121, because I never saw an assembly for which larger k-mers are optimal.
 fi	
 
 #In the html file produced by Kmergenie there are two lines for which I'll parse the file:
@@ -392,46 +380,25 @@ genome_size_estimate=`perl -ne 'if($_=~/Predicted assembly size: (\d+)/){print "
 echo "Before the assembly, the genome size is preliminary estimated as "$genome_size_estimate" bp" >>$path_to_the_output_folder/logfile.txt
 #echo "The optimal k-mer size for the assembly from short reads is "$optimal_kmer_length" bp" >>$path_to_the_output_folder/logfile.txt
 
-#Now I estimate how much RAM is available.
-<<COMMENT
-Different Linux versions have different versions of the "free" command. I saw two variants:
-              total        used        free      shared  buff/cache   available
-Mem:           1007          41         363           0         603         960
-Swap:             0           0           0
+#First, I need to estimate different parameters required for the assembly.
 
-or
+#calculating the total length of short reads.
+total_length_of_short_reads_R1=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_short_reads_R1`
+total_length_of_short_reads_R2=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_short_reads_R2`
+total_length_of_short_reads=`perl -e "print ($total_length_of_short_reads_R1+$total_length_of_short_reads_R2);"`
 
-             total       used       free     shared    buffers     cached
-Mem:            35         11         23          0          0          0
--/+ buffers/cache:         11         24
-Swap:            0          0          0
+coverage_by_short_reads=`perl -e "print int((10*$total_length_of_short_reads/$genome_size_estimate)+0.5)/10;"` #coverage of the genome by long reads. Rounded to the first number after the dot.
+echo "The estimated coverage by short reads is "$coverage_by_short_reads >>$path_to_the_output_folder/logfile.txt
 
-If Galyp sees the first version, it takes the value of "available". If Galyp sees the second version, it takes the sum of "free", "shared", "buffers", "cached".
 
-I calculate the amount of free RAM approximately as suggested at https://unix.stackexchange.com/questions/152299/how-to-get-memory-usedram-used-using-linux-command .
+#Calculating the total length of long reads.
+echo "Executing perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_long_reads"
+total_length_of_long_reads=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_long_reads`
+echo "Total length of long reads is "$total_length_of_long_reads
 
-COMMENT
-first_line_of_free_output=`free -g | perl -ne 'if($.==1){print $_;}'`
+coverage_by_long_reads=`perl -e "print int((10*$total_length_of_long_reads/$genome_size_estimate)+0.5)/10;"` #coverage of the genome by short reads. Rounded to the first number after the dot.
+echo "The estimated coverage by long reads is "$coverage_by_long_reads >>$path_to_the_output_folder/logfile.txt
 
-if [[ $first_line_of_free_output =~ "available" ]] 
-then
-	amount_of_free_RAM__in_gigabytes=`free -g | awk 'FNR == 2 {print ($7)}'`
-else
-	amount_of_free_RAM__in_gigabytes=`free -g | awk 'FNR == 2 {print ($4+$5+$6+$7)}'`
-fi
-
-amount_of_free_RAM__in_gigabytes=`perl -e "print int($amount_of_free_RAM__in_gigabytes);"` #rounding
-
-#based on my experience, 500*$genome_size_estimate (like, 500 Gb RAM for a 1Gbp-long genome) is enough for assembly. I suppose that for bacteria 50 Gb is enough, though I didn't test it. If a bacterial genome size is 5 Mb, 500*$genome_size_estimate is 2.5 Gb, which is too small. Consequently, if $amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly is smaller than 50 Gb, I set this value to 50 Gb. 
-amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly=`perl -e "if(int(500*$genome_size_estimate/1073741824)>50){print int(500*$genome_size_estimate/1073741824)}else{print 50;}"`
-#amount_of_RAM_to_use__in_gigabytes=`perl -e "if(($amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly)<$amount_of_free_RAM__in_gigabytes){print $amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly;}else{print $amount_of_free_RAM__in_gigabytes;}"`
-
-if (( $(echo "$amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly <= $amount_of_free_RAM__in_gigabytes" | bc -l) ))
-then
-	echo "$amount_of_free_RAM__in_gigabytes Gb RAM are available. Galyp estimates that $amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly Gb RAM would be sufficient for the assembly of this genome." >>$path_to_the_output_folder/logfile.txt
-else
-	echo "Warning. Galyp estimates that $amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly Gb RAM would be sufficient for the assembly of this genome, but only $amount_of_free_RAM__in_gigabytes Gb RAM are available. This doesn't necessarily mean that Galyp will crash due to lack of RAM, but such a possibility exists." >>$path_to_the_output_folder/logfile.txt
-fi
 
 if (( $(echo "$number_of_the_first_step_in_the_pipeline_to_execute == 1" | bc -l) )) #if the user didn't indicate that this step should be skipped
 then
@@ -454,7 +421,7 @@ fi
 
 
 #######################################
-#Step 2. Assemble the genome from short reads using ABySS.
+#Step 2. Assemble the genome from short reads using Minia.
 
 #Printing to the logfile.
 echo "" >>$path_to_the_output_folder/logfile.txt
@@ -462,35 +429,23 @@ current_date_and_time=`date`
 echo "Step 2. Galyp started to assemble the genome using short reads. "$current_date_and_time >>$path_to_the_output_folder/logfile.txt
 echo "" >>$path_to_the_output_folder/logfile.txt
 
-#If the amount of free memory is less than 300*genome_size (like, 300G for a 1Gbp-long genome), then ABySS uses Bloom filter to avoid problems with insufficient memory.
-estimated_amount_of_RAM_sufficient_to_avoid_using_a_Bloom_filter__in_gigabytes=`perl -e "print int(300*$genome_size_estimate/1073741824)"` #approximately how much RAM ABySS needs to assemble the genome without using a Bloom filter, rounded.
 
-
-#By default, the parameter "np" of OpenMPI means the number of physical cores to use, not logical cores. A user probably runs Galyp on a machine with hyperthreading, so I calculate the number of cores to use by dividing $number_of_cpu_threads_to_use by two. If the user indicated that Galyp should use only one threads, then Abyss will use one core.
-number_of_cpu_cores_to_be_used_by_abyss=`perl -e "if($number_of_cpu_threads_to_use!=1){print int($number_of_cpu_threads_to_use/2);}else{print $number_of_cpu_threads_to_use;}"`
-
-if (( $(echo "$amount_of_free_RAM__in_gigabytes >= $estimated_amount_of_RAM_sufficient_to_avoid_using_a_Bloom_filter__in_gigabytes" | bc -l) )) #if the user has provided enough ram to avoid using a Bloom filter.
+if (( $(echo "$number_of_the_first_step_in_the_pipeline_to_execute <= 2" | bc -l) )) #if the user didn't indicate that this step should be skipped
 then
-	if (( $(echo "$number_of_the_first_step_in_the_pipeline_to_execute <= 2" | bc -l) )) #if the user didn't indicate that this step should be skipped
-	then
-		/usr/bin/time -v abyss-pe --directory=$path_to_the_output_folder name=abyss_assembly k=$optimal_kmer_length in=$path_to_short_reads_R1" "$path_to_short_reads_R2 np=$number_of_cpu_cores_to_be_used_by_abyss "unitigs"
-	fi	
-	echo "Running ABySS without a Bloom filter" >>$path_to_the_output_folder/logfile.txt
-else
-	if (( $(echo "$number_of_the_first_step_in_the_pipeline_to_execute <= 2" | bc -l) )) #if the user didn't indicate that this step should be skipped
-	then
-		/usr/bin/time -v abyss-pe --directory=$path_to_the_output_folder name=abyss_assembly k=$optimal_kmer_length in=$path_to_short_reads_R1" "$path_to_short_reads_R2 np=$number_of_cpu_cores_to_be_used_by_abyss B=$amount_of_free_RAM__in_gigabytes"G" H=3 kc=2 v=-v "unitigs"
-	fi	
-	echo "To reduce RAM consumption, ABySS was run using a Bloom filter" >>$path_to_the_output_folder/logfile.txt
-fi
+	#The amount of gigabytes of RAM that I give Minia is max(40*$genome_size_estimate,40). Based on its manual, I suppose it will be enough.
+	amount_of_RAM_to_be_used_by_minia_in_megabytes=`perl -e "if($genome_size_estimate>1000000000){print(int(40*$genome_size_estimate/1000000));}else{print '40000';}"`
+	
+	/usr/bin/time -v $path_to_the_folder_with_galyp/Additional_programs/minia -in $path_to_the_output_folder/list_of_paths_to_files_with_short_reads.txt -traversal contig -kmer-size $optimal_kmer_length -abundance-min 2 -max-memory $amount_of_RAM_to_be_used_by_minia_in_megabytes -out-tmp $path_to_the_output_folder -out $path_to_the_output_folder/minia -nb-cores $number_of_cpu_threads_to_use
+fi	
+
 
 if (( $(echo "$number_of_the_first_step_in_the_pipeline_to_execute <= 2" | bc -l) )) #if the user didn't indicate that this step should be skipped
 then
 	#checking if this step finished successfully. "-s" means that file exists and has a non-zero size.
-	if [ ! -s $path_to_the_output_folder"/abyss_assembly-unitigs.fa" ]
+	if [ ! -s $path_to_the_output_folder"/minia.contigs.fa" ]
 	then
 		echo "" >>$path_to_the_output_folder/logfile.txt
-		echo -e "There was a problem at Step 2 of Galyp. This may be, for example, because you added to \$PATH the folder with the pre-compiled binary of ABySS, while you should have added the folder with ABySS which you compiled with OpenMPI. Also, you might want to examine the standard output and the standard error output of Galyp to identify the source of the problem." >>$path_to_the_output_folder/logfile.txt
+		echo "There was a problem at Step 2 of Galyp. You might want to examine the standard output and the standard error output of Galyp to identify the source of the problem." >>$path_to_the_output_folder/logfile.txt
 		exit
 	fi
 fi
@@ -505,24 +460,13 @@ fi
 
 
 #######################################
-#Step 3. Assemble the genome by DBG2OLC using the genome assembly created by ABySS and long reads.
+#Step 3. Assemble the genome by DBG2OLC using the genome assembly created by Minia and long reads.
 
 #Printing to the logfile.
 echo "" >>$path_to_the_output_folder/logfile.txt
 current_date_and_time=`date`
 echo "Step 3. Galyp started to assemble the genome using both long and short reads. "$current_date_and_time >>$path_to_the_output_folder/logfile.txt
 echo "" >>$path_to_the_output_folder/logfile.txt
-
-
-
-#First, I need to estimate different parameters required for the assembly.
-#Calculating the total length of long reads.
-echo "Executing perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_long_reads"
-total_length_of_long_reads=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_long_reads`
-echo "Total length of long reads is "$total_length_of_long_reads
-
-coverage_by_long_reads=`perl -e "print int((10*$total_length_of_long_reads/$genome_size_estimate)+0.5)/10;"` #coverage of the genome by short reads. Rounded to the first number after the dot.
-echo "Estimated coverage by long reads is "$coverage_by_long_reads >>$path_to_the_output_folder/logfile.txt
 
 #if the coverage by long reads is larger then 30, I downsample the long reads to make coverage 30 , taking the longest among the long reads during downsampling.
 if (( $(echo "$coverage_by_long_reads > 30" | bc -l) ))
@@ -538,21 +482,14 @@ else #if the total coverage by long reads is smaller than 30, DBG2OLC will use a
 	coverage_by_long_reads_used_for_DBG2OLC_assembly=$coverage_by_long_reads
 fi
 
-#calculating the total length of short reads.
-total_length_of_short_reads_R1=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_short_reads_R1`
-total_length_of_short_reads_R2=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_short_reads_R2`
-total_length_of_short_reads=`perl -e "print ($total_length_of_short_reads_R1+$total_length_of_short_reads_R2);"`
 
-coverage_by_short_reads=`perl -e "print int((10*$total_length_of_short_reads/$genome_size_estimate)+0.5)/10;"` #coverage of the genome by long reads. Rounded to the first number after the dot.
-echo "Estimated coverage by short reads is "$coverage_by_short_reads >>$path_to_the_output_folder/logfile.txt
+#calculating the total length of Minia contigs.
+total_length_of_minia_contigs=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_the_output_folder"/minia.contigs.fa"`
+echo "The total length of Minia contigs is "$total_length_of_minia_contigs" bp" >>$path_to_the_output_folder/logfile.txt
 
-#calculating the total length of ABySS unitigs.
-total_length_of_abyss_unitigs=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_total_read_length.pl $path_to_the_output_folder"/abyss_assembly-unitigs.fa"`
-echo "The total length of ABySS unitigs is "$total_length_of_abyss_unitigs" bp" >>$path_to_the_output_folder/logfile.txt
-
-#calculating N50 of ABySS unitigs. I don't consider unitigs shorter than 1000 bp, because they may originate from contamination, misassemblies and, probably, some other problematic sources.
-n50_of_abyss_unitigs=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_n50_for_sequences_longer_than_or_equal_to_1kbp.pl $path_to_the_output_folder"/abyss_assembly-unitigs.fa"`
-echo "N50 of ABySS unitigs (counting only unitigs longer than or equal 1000 bp) is "$n50_of_abyss_unitigs" bp" >>$path_to_the_output_folder/logfile.txt
+#calculating N50 of Minia contigs. I don't consider Minia contigs shorter than 1000 bp, because they may originate from contamination, misassemblies and, probably, some other problematic sources.
+n50_of_minia_contigs=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_n50_for_sequences_longer_than_or_equal_to_1kbp.pl $path_to_the_output_folder"/minia.contigs.fa"`
+echo "N50 of Minia contigs (counting only contigs longer than or equal 1000 bp) is "$n50_of_minia_contigs" bp" >>$path_to_the_output_folder/logfile.txt
 
 #calculating N50 of those long reads that Galyp will use for assembly.
 n50_of_long_reads_that_will_be_used_by_DBG2OLC=`perl $path_to_the_folder_with_galyp/Additional_scripts/calculate_n50.pl $path_to_the_output_folder/long_reads_to_be_used_by_DBG2OLC.fasta`
@@ -584,10 +521,10 @@ else #if the coverage by long reads is between 10 and 100, I use intermediate va
 	ContigCovTh=1
 fi
 
-#Now, if $n50_of_abyss_unitigs is larger than $n50_of_long_reads_that_will_be_used_by_DBG2OLC, I divide AdaptiveTh by ($n50_of_abyss_unitigs/$n50_of_long_reads_that_will_be_used_by_DBG2OLC). This is because if ABySS unitigs are very long, it would be hard for long reads to cover them entirely and, hence, AdaptiveTh should be adjusted.
-if (( $(echo "$n50_of_abyss_unitigs > $n50_of_long_reads_that_will_be_used_by_DBG2OLC" | bc -l) ))
+#Now, if $n50_of_minia_contigs is larger than $n50_of_long_reads_that_will_be_used_by_DBG2OLC, I divide AdaptiveTh by ($n50_of_minia_contigs/$n50_of_long_reads_that_will_be_used_by_DBG2OLC). This is because if the Minia contigs are very long, it would be hard for long reads to cover them entirely and, hence, AdaptiveTh should be adjusted.
+if (( $(echo "$n50_of_minia_contigs > $n50_of_long_reads_that_will_be_used_by_DBG2OLC" | bc -l) ))
 then
-	AdaptiveTh=`perl -e "print ($AdaptiveTh/($n50_of_abyss_unitigs/$n50_of_long_reads_that_will_be_used_by_DBG2OLC));"`
+	AdaptiveTh=`perl -e "print ($AdaptiveTh/($n50_of_minia_contigs/$n50_of_long_reads_that_will_be_used_by_DBG2OLC));"`
 fi
 
 #Adjusting KmerCovTh, MinOverlap and AdaptiveTh for error rate and strictness. Probability of existence of an error-free 17-mer is (1-error_rate)**17. I assume that the parameters of DBG2OLC recommended by its author suit for an error rate of 0.1 (10%). 
@@ -603,15 +540,12 @@ ContigCovTh=`perl -e "print int($strictness_of_the_assembly_process*$ContigCovTh
 KmerCovTh=`perl -e "if($KmerCovTh>=2){print $KmerCovTh;}else{print '2';};"`
 MinOverlap=`perl -e "if($MinOverlap>=10){print $MinOverlap;}else{print '10';};"`
 
-#Now I determine how many threads I should run DBG2OLC on. This is calculated as max(1,min(int($amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly/50),int($amount_of_free_RAM__in_gigabytes/50))), because based on my experience DBG2OLC rarely (if ever) uses more than 50Gb of RAM per thread.
-number_of_threads_to_run_DBG2OLC_on=`perl -e "if($amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly<=$amount_of_free_RAM__in_gigabytes){if(int($amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly/50)>1){print int($amount_of_RAM_that_is_estimated_as_sufficient_for_the_assembly/50);}else{print 1;}}else{if(int($amount_of_free_RAM__in_gigabytes/50)>1){print int($amount_of_free_RAM__in_gigabytes/50);}else{print 1;}}"`
-
-echo "Running DBG2OLC assembly with options k 17 AdaptiveTh "$AdaptiveTh" KmerCovTh "$KmerCovTh" MinOverlap "$MinOverlap" RemoveChimera "$RemoveChimera" ChimeraTh "$ChimeraTh" ContigCovTh "$ContigCovTh" Contigs "$path_to_the_output_folder"/abyss_assembly-unitigs.fa f " >>$path_to_the_output_folder/logfile.txt
+echo "Running DBG2OLC assembly with options k 17 AdaptiveTh "$AdaptiveTh" KmerCovTh "$KmerCovTh" MinOverlap "$MinOverlap" RemoveChimera "$RemoveChimera" ChimeraTh "$ChimeraTh" ContigCovTh "$ContigCovTh" Contigs "$path_to_the_output_folder"/minia.contigs.fa f " >>$path_to_the_output_folder/logfile.txt
 
 if (( $(echo "$number_of_the_first_step_in_the_pipeline_to_execute <= 3" | bc -l) )) #if the user didn't indicate that this step should be skipped
 then
 	cd $path_to_the_output_folder
-	/usr/bin/time -v $path_to_the_folder_with_galyp/Additional_programs/DBG2OLC k 17 AdaptiveTh $AdaptiveTh KmerCovTh $KmerCovTh MinOverlap $MinOverlap RemoveChimera $RemoveChimera ChimeraTh $ChimeraTh ContigCovTh $ContigCovTh Contigs $path_to_the_output_folder/abyss_assembly-unitigs.fa f $path_to_the_output_folder/long_reads_to_be_used_by_DBG2OLC.fasta
+	/usr/bin/time -v $path_to_the_folder_with_galyp/Additional_programs/DBG2OLC k 17 AdaptiveTh $AdaptiveTh KmerCovTh $KmerCovTh MinOverlap $MinOverlap RemoveChimera $RemoveChimera ChimeraTh $ChimeraTh ContigCovTh $ContigCovTh Contigs $path_to_the_output_folder/minia.contigs.fa f $path_to_the_output_folder/long_reads_to_be_used_by_DBG2OLC.fasta
 	cd $path_to_the_folder_from_which_Galyp_was_run
 	
 	#checking if this step finished successfully. "-s" means that file exists and has a non-zero size.
@@ -651,10 +585,10 @@ then
 		rm -rf ./Sparc_folder_for_consensus_calculation
 	fi
 	
-	#concatenating ABySS unitigs and long reads in one file.
-	cat $path_to_the_output_folder/abyss_assembly-unitigs.fa $path_to_the_output_folder/long_reads_to_be_used_by_DBG2OLC.fasta > $path_to_the_output_folder/abyss_unitigs_and_long_reads_together.fasta
+	#concatenating Minia contigs and long reads in one file.
+	cat $path_to_the_output_folder/minia.contigs.fa $path_to_the_output_folder/long_reads_to_be_used_by_DBG2OLC.fasta > $path_to_the_output_folder/minia_contigs_and_long_reads_together.fasta
 	mkdir $path_to_the_output_folder/Sparc_folder_for_consensus_calculation
-	bash $path_to_the_folder_with_galyp/Additional_scripts/Sparc_scripts/split_and_run_sparc__modified.sh $path_to_the_output_folder/backbone_raw.fasta $path_to_the_output_folder/DBG2OLC_Consensus_info.txt $path_to_the_output_folder/abyss_unitigs_and_long_reads_together.fasta $path_to_the_output_folder/Sparc_folder_for_consensus_calculation 2 $number_of_cpu_threads_to_use $path_to_the_folder_with_galyp >cns_log.txt
+	bash $path_to_the_folder_with_galyp/Additional_scripts/Sparc_scripts/split_and_run_sparc__modified.sh $path_to_the_output_folder/backbone_raw.fasta $path_to_the_output_folder/DBG2OLC_Consensus_info.txt $path_to_the_output_folder/minia_contigs_and_long_reads_together.fasta $path_to_the_output_folder/Sparc_folder_for_consensus_calculation 2 $number_of_cpu_threads_to_use $path_to_the_folder_with_galyp >cns_log.txt
 	
 	cd $path_to_the_folder_from_which_Galyp_was_run
 	
