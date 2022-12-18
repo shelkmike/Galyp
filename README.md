@@ -19,8 +19,7 @@ Perl<br />
 [Purge_dups](https://github.com/dfguan/purge_dups)<br />
 [Kmergenie](http://kmergenie.bx.psu.edu/)<br />
 [Minimap2](https://github.com/lh3/minimap2)<br />
-[HyPo](https://github.com/kensung-lab/hypo)<br />
-[ABySS](https://github.com/bcgsc/abyss) (must be installed with Open MPI support turned on. The easiest way to install ABySS properly is through [Homebrew](https://github.com/bcgsc/abyss#quick-start))<br /><br />
+[HyPo](https://github.com/kensung-lab/hypo)<br /><br />
 The programs need to be installed with their dependencies. For example, the installation instructions for HyPo state that it requires KMC3.<br />
 
 To check that all programs are correctly installed, you can assemble a *small dataset* provided with Galyp in the folder Test_dataset. Its assembly will take several minutes and should produce a file contigs.fasta which contains an approximately 30 kbp-long genome. If you don't see this file after the assembly, take a look into logfile.txt.<br /><br />
